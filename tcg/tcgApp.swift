@@ -1,32 +1,20 @@
-//
-//  tcgApp.swift
-//  tcg
-//
-//  Created by Alexandre Odet on 18/10/2026.
-//
-
 import SwiftUI
-import SwiftData
 
 @main
 struct tcgApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    @State private var viewModel: AuthViewModel
 
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    init() {
+        let client = APIClient(baseURL: AppConfig.apiBaseURL)
+        let authAPI = LiveAuthAPI(client: client)
+        let sessions = SessionManager(store: KeychainSessionStore(), api: authAPI)
+        let userAPI = UserAPI(client: client, authorized: AuthorizedClient(sessions: sessions))
+        _viewModel = State(initialValue: AuthViewModel(sessions: sessions, authAPI: authAPI, userAPI: userAPI))
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(viewModel: viewModel)
         }
-        .modelContainer(sharedModelContainer)
     }
 }
