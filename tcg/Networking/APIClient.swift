@@ -1,13 +1,16 @@
+import Alamofire
 import Foundation
 
-/// Client HTTP JSON bas niveau. Ne gère ni session ni rafraîchissement : voir `AuthorizedClient`.
+/// Low-level JSON HTTP client built on Alamofire. It knows nothing about sessions or token
+/// refresh: see `AuthorizedClient`.
 nonisolated final class APIClient: Sendable {
     private let baseURL: URL
-    private let urlSession: URLSession
+    private let session: Session
 
-    init(baseURL: URL, urlSession: URLSession = .shared) {
+    /// - Parameter session: Alamofire session; inject a custom one in tests (e.g. with a stub URLProtocol).
+    init(baseURL: URL, session: Session = .default) {
         self.baseURL = baseURL
-        self.urlSession = urlSession
+        self.session = session
     }
 
     func send<T: Decodable>(
@@ -25,7 +28,7 @@ nonisolated final class APIClient: Sendable {
         }
     }
 
-    /// Pour les routes sans corps de réponse (204).
+    /// For routes without a response body (204).
     func sendVoid(
         _ method: String,
         _ path: String,
@@ -43,28 +46,25 @@ nonisolated final class APIClient: Sendable {
         idempotencyKey: String?
     ) async throws -> Data {
         var request = URLRequest(url: baseURL.appending(path: path))
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.method = HTTPMethod(rawValue: method)
+        request.headers.add(.accept("application/json"))
         if let body {
+            // Encoded here (not by Alamofire) to share the snake_case encoder with the rest of the app.
             request.httpBody = try JSONCoding.encoder().encode(body)
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.headers.add(.contentType("application/json"))
         }
-        if let bearer { request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
-        if let idempotencyKey { request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key") }
+        if let bearer { request.headers.add(.authorization(bearerToken: bearer)) }
+        if let idempotencyKey { request.headers.add(name: "Idempotency-Key", value: idempotencyKey) }
 
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await urlSession.data(for: request)
-        } catch {
-            throw APIError.transport(error.localizedDescription)
-        }
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport("Réponse non HTTP")
+        // No `validate()`: we map status codes ourselves to keep the server's error envelope.
+        // `serializingData` accepts empty bodies for 204/205.
+        let response = await session.request(request).serializingData().response
+        guard let http = response.response else {
+            throw APIError.transport(response.error?.localizedDescription ?? "No response")
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw APIError.from(status: http.statusCode, body: data)
+            throw APIError.from(status: http.statusCode, body: response.data ?? Data())
         }
-        return data
+        return response.data ?? Data()
     }
 }

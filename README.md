@@ -2,6 +2,12 @@
 
 App SwiftUI : cartes issues d'articles Wikipédia, boosters, collection. Serveur : [tcg-server](https://github.com/AlexandreOdet/tcg-server).
 
+## Dépendances
+
+- **Alamofire** (SPM) : réseau. À ajouter une fois dans Xcode : File > Add Package Dependencies >
+  `https://github.com/Alamofire/Alamofire` (règle « Up to Next Major », version 5.x) > produit
+  `Alamofire` sur la target **tcg**.
+
 ## Lancer en local
 
 1. Serveur : dans `tcg-server`, `docker compose up -d`, copier `.env.example` vers `.env`, puis
@@ -16,7 +22,7 @@ App SwiftUI : cartes issues d'articles Wikipédia, boosters, collection. Serveur
 ## Structure
 
 - `Config/` : URL du serveur.
-- `Networking/` : client HTTP, erreurs, modèles.
+- `Networking/` : client HTTP (Alamofire), erreurs, modèles.
 - `Auth/` : nonce, Keychain, `SessionManager` (rafraîchissement unique), `AuthorizedClient` (401 → refresh → rejeu).
 - `Features/` : écrans (connexion, profil provisoire).
 
